@@ -4,44 +4,138 @@ const router = express.Router();
 // In-memory cart storage
 let carts = {};
 
-// TODO: Implement GET /cart/:userId — return the user's cart items
-// Expected: 200 with { items: [...], total: number }
-// Should return empty cart { items: [], total: 0 } if user has no cart
+// Helper: ensure cart exists
+function getCart(userId) {
+  if (!carts[userId]) {
+    carts[userId] = { items: [] };
+  }
+  return carts[userId];
+}
+
+// Helper: calculate total
+function calculateTotal(cart) {
+  return cart.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+}
+
+// GET /cart/:userId
 router.get('/cart/:userId', (req, res) => {
-  // Your implementation here
+  const { userId } = req.params;
+  const cart = getCart(userId);
+
+  return res.status(200).json({
+    items: cart.items,
+    total: calculateTotal(cart),
+  });
 });
 
-// TODO: Implement POST /cart/:userId/add — add item to cart
-// Body: { productId: string, name: string, price: number, quantity: number }
-// Expected: 201 with the updated cart
-// Validate that price > 0 and quantity >= 1
-// If product already in cart, increment quantity instead of duplicating
+// POST /cart/:userId/add
 router.post('/cart/:userId/add', (req, res) => {
-  // Your implementation here
+  const { userId } = req.params;
+  const { productId, name, price, quantity } = req.body;
+
+  if (!productId || !name || price <= 0 || quantity < 1) {
+    return res.status(400).json({ message: 'Invalid product data' });
+  }
+
+  const cart = getCart(userId);
+
+  const existingItem = cart.items.find(
+    (item) => item.productId === productId
+  );
+
+  if (existingItem) {
+    existingItem.quantity += quantity;
+  } else {
+    cart.items.push({ productId, name, price, quantity });
+  }
+
+  return res.status(201).json({
+    items: cart.items,
+    total: calculateTotal(cart),
+  });
 });
 
-// TODO: Implement DELETE /cart/:userId/remove/:productId — remove item from cart
-// Expected: 200 with updated cart
-// Return 404 if product not in cart
+// DELETE /cart/:userId/remove/:productId
 router.delete('/cart/:userId/remove/:productId', (req, res) => {
-  // Your implementation here
+  const { userId, productId } = req.params;
+  const cart = getCart(userId);
+
+  const index = cart.items.findIndex(
+    (item) => item.productId === productId
+  );
+
+  if (index === -1) {
+    return res.status(404).json({ message: 'Product not in cart' });
+  }
+
+  cart.items.splice(index, 1);
+
+  return res.status(200).json({
+    items: cart.items,
+    total: calculateTotal(cart),
+  });
 });
 
-// TODO: Implement PUT /cart/:userId/update/:productId — update item quantity
-// Body: { quantity: number }
-// Expected: 200 with updated cart
-// Validate quantity >= 0 (0 removes the item)
-// Return 404 if product not in cart
+// PUT /cart/:userId/update/:productId
 router.put('/cart/:userId/update/:productId', (req, res) => {
-  // Your implementation here
+  const { userId, productId } = req.params;
+  const { quantity } = req.body;
+
+  if (quantity === undefined || quantity < 0) {
+    return res.status(400).json({ message: 'Invalid quantity' });
+  }
+
+  const cart = getCart(userId);
+
+  const item = cart.items.find(
+    (i) => i.productId === productId
+  );
+
+  if (!item) {
+    return res.status(404).json({ message: 'Product not in cart' });
+  }
+
+  if (quantity === 0) {
+    cart.items = cart.items.filter(
+      (i) => i.productId !== productId
+    );
+  } else {
+    item.quantity = quantity;
+  }
+
+  return res.status(200).json({
+    items: cart.items,
+    total: calculateTotal(cart),
+  });
 });
 
-// TODO: Implement POST /cart/:userId/checkout — process checkout
-// Expected: 200 with { orderId: string, total: number, items: [...] }
-// Clear the cart after successful checkout
-// Return 400 if cart is empty
+// POST /cart/:userId/checkout
 router.post('/cart/:userId/checkout', (req, res) => {
-  // Your implementation here
+  const { userId } = req.params;
+  const cart = getCart(userId);
+
+  if (cart.items.length === 0) {
+    return res.status(400).json({ message: 'Cart is empty' });
+  }
+
+  const total = calculateTotal(cart);
+
+  const orderId =
+    'ORD-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+
+  const order = {
+    orderId,
+    total,
+    items: cart.items,
+  };
+
+  // clear cart after checkout
+  carts[userId] = { items: [] };
+
+  return res.status(200).json(order);
 });
 
 module.exports = router;
